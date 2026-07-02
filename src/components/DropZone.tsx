@@ -15,8 +15,9 @@ export function DropZone({ onFile, accept }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const readFile = (file: File) => {
-    if (file.size > LIMITS.FILE_BYTES) {
-      setError(ERRORS.FILE_TOO_LARGE((file.size / (1024 * 1024)).toFixed(1)))
+    if (file.size > LIMITS.FILE_BYTES_HARD) {
+      const displayMb = (Math.ceil(file.size / (1024 * 1024) * 10) / 10).toFixed(1)
+      setError(ERRORS.FILE_TOO_LARGE(displayMb))
       return
     }
     setError(null)

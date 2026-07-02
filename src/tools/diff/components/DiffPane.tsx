@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type RefObject } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ByteCounter } from '@/components/ByteCounter'
 import { LimitBanner } from '@/components/LimitBanner'
@@ -22,9 +22,10 @@ interface DiffPaneProps {
   rows: DiffRow[] | null
   side: 'left' | 'right'
   wrap: boolean
+  scrollRef?: RefObject<HTMLDivElement | null>
 }
 
-export function DiffPane({ label, value, onChange, rows, side, wrap }: DiffPaneProps) {
+export function DiffPane({ label, value, onChange, rows, side, wrap, scrollRef }: DiffPaneProps) {
   const [bannerError, setBannerError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('paste')
   const byteLength = new TextEncoder().encode(value).length
@@ -44,7 +45,7 @@ export function DiffPane({ label, value, onChange, rows, side, wrap }: DiffPaneP
         <div className="border-b-[0.5px] border-[#30363d] px-3 py-2 text-[14px] text-[#8b949e]">
           {label}
         </div>
-        <div className={`min-h-0 flex-1 overflow-auto font-mono text-[16px] ${wrap ? '' : 'overflow-x-auto'}`}>
+        <div ref={scrollRef} className={`min-h-0 flex-1 overflow-auto font-mono text-[16px] ${wrap ? '' : 'overflow-x-auto'}`}>
           {rows.map((row, i) => {
             const segments = side === 'left' ? row.left : row.right
             const colors = ROW_COLORS[row.type]

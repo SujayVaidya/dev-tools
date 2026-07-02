@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useKeyboardShortcut } from '@/hooks/useKeyboardShortcut'
@@ -10,6 +10,14 @@ import { InputPanel } from './components/InputPanel'
 import { OutputPanel } from './components/OutputPanel'
 import { getJsonErrorLocation, indentValue, type IndentOption } from './jsonUtils'
 
+interface JsonState {
+  parsed: unknown
+  parseErr: Error | null
+  formattedOutput: string
+}
+
+const EMPTY_STATE: JsonState = { parsed: null, parseErr: null, formattedOutput: '' }
+
 export default function JsonFormatter() {
   useDocumentTitle('JSON Formatter — jayTools')
   const { rawInput, setRawInput, setOutputCache } = useJsonStorage()
@@ -20,27 +28,44 @@ export default function JsonFormatter() {
   const { copy } = useCopyToClipboard()
 
   const [debouncedInput, setDebouncedInput] = useState(rawInput)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedInput(rawInput), 300)
+    const timer = setTimeout(() => {
+      setIsProcessing(rawInput.trim() !== '')
+      setDebouncedInput(rawInput)
+    }, 300)
     return () => clearTimeout(timer)
   }, [rawInput])
 
-  const { parsed, error } = useMemo(() => {
-    if (debouncedInput.trim() === '') return { parsed: null, error: null }
-    try {
-      return { parsed: JSON.parse(debouncedInput) as unknown, error: null }
-    } catch (err) {
-      return { parsed: null, error: err as Error }
-    }
-  }, [debouncedInput])
+  const [jsonState, setJsonState] = useState<JsonState>(EMPTY_STATE)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
-  const parseError = error ? getJsonErrorLocation(debouncedInput, error) : null
+  useEffect(() => {
+    clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
+      if (debouncedInput.trim() === '') {
+        setJsonState(EMPTY_STATE)
+        setIsProcessing(false)
+        return
+      }
+      try {
+        const parsed = JSON.parse(debouncedInput) as unknown
+        const formattedOutput =
+          mode === 'minify'
+            ? JSON.stringify(parsed)
+            : JSON.stringify(parsed, null, indentValue(indent))
+        setJsonState({ parsed, parseErr: null, formattedOutput })
+      } catch (err) {
+        setJsonState({ parsed: null, parseErr: err as Error, formattedOutput: '' })
+      }
+      setIsProcessing(false)
+    }, 0)
+    return () => clearTimeout(timerRef.current)
+  }, [debouncedInput, mode, indent])
 
-  const formattedOutput = useMemo(() => {
-    if (parsed === null) return ''
-    return mode === 'minify' ? JSON.stringify(parsed) : JSON.stringify(parsed, null, indentValue(indent))
-  }, [parsed, mode, indent])
+  const { parsed, parseErr, formattedOutput } = jsonState
+  const parseError = parseErr ? getJsonErrorLocation(debouncedInput, parseErr) : null
 
   useEffect(() => {
     setOutputCache(formattedOutput)
@@ -100,6 +125,7 @@ export default function JsonFormatter() {
             parsed={parsed}
             wrap={wrap}
             indent={indentValue(indent)}
+            isProcessing={isProcessing}
             onCopySection={copy}
             emptyMessage={
               rawInput.trim() === ''

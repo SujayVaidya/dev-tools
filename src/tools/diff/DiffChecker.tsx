@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPatch } from 'diff'
 import { toast } from 'sonner'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
@@ -14,8 +14,45 @@ export default function DiffChecker() {
   const { left, right } = useDiffStorage()
   const [wrap, setWrap] = usePreference('pref:diff:wrap', false)
   const [ignoreWhitespace, setIgnoreWhitespace] = usePreference('pref:diff:ignoreWhitespace', false)
+  const [syncScroll, setSyncScroll] = usePreference('pref:diff:syncScroll', true)
   const [rows, setRows] = useState<DiffRow[] | null>(null)
+
   const [summary, setSummary] = useState<DiffSummary | null>(null)
+
+  const leftScrollRef = useRef<HTMLDivElement | null>(null)
+  const rightScrollRef = useRef<HTMLDivElement | null>(null)
+  const isSyncing = useRef(false)
+  const syncScrollRef = useRef(syncScroll)
+  syncScrollRef.current = syncScroll
+
+  useEffect(() => {
+    if (!rows) return
+    const left = leftScrollRef.current
+    const right = rightScrollRef.current
+    if (!left || !right) return
+
+    const onLeftScroll = () => {
+      if (!syncScrollRef.current || isSyncing.current) return
+      isSyncing.current = true
+      right.scrollTop = left.scrollTop
+      right.scrollLeft = left.scrollLeft
+      requestAnimationFrame(() => { isSyncing.current = false })
+    }
+    const onRightScroll = () => {
+      if (!syncScrollRef.current || isSyncing.current) return
+      isSyncing.current = true
+      left.scrollTop = right.scrollTop
+      left.scrollLeft = right.scrollLeft
+      requestAnimationFrame(() => { isSyncing.current = false })
+    }
+
+    left.addEventListener('scroll', onLeftScroll, { passive: true })
+    right.addEventListener('scroll', onRightScroll, { passive: true })
+    return () => {
+      left.removeEventListener('scroll', onLeftScroll)
+      right.removeEventListener('scroll', onRightScroll)
+    }
+  }, [rows])
 
   const runCompare = () => {
     const { rows: nextRows, summary: nextSummary } = computeDiff(
@@ -90,6 +127,17 @@ export default function DiffChecker() {
         >
           Ignore whitespace
         </button>
+        <button
+          type="button"
+          onClick={() => setSyncScroll(!syncScroll)}
+          className={`rounded-[6px] border-[0.5px] px-2.5 py-1 text-[15px] ${
+            syncScroll
+              ? 'border-[#7c6ff7] text-[#7c6ff7]'
+              : 'border-[#30363d] text-[#8b949e] hover:bg-[#161b22] hover:text-[#e6edf3]'
+          }`}
+        >
+          Sync scroll
+        </button>
         <div className="h-4 w-px bg-[#30363d]" />
         <button
           type="button"
@@ -123,6 +171,7 @@ export default function DiffChecker() {
               rows={rows}
               side="left"
               wrap={wrap}
+              scrollRef={leftScrollRef}
             />
           </div>
           <div className="min-w-0 flex-1">
@@ -133,6 +182,7 @@ export default function DiffChecker() {
               rows={rows}
               side="right"
               wrap={wrap}
+              scrollRef={rightScrollRef}
             />
           </div>
         </div>
